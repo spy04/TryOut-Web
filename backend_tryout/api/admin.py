@@ -47,5 +47,12 @@ admin.site.register(Transaction)
 admin.site.register(Materi)
 admin.site.register(LatihanSoal)
 admin.site.register(Subscription)
+admin.site.register(Discount)
 
+admin.site.register(Quote)
+admin.site.register(CountdownUTBK)
 
+admin.site.register(UserAnswer)
+admin.site.register(TryoutSession)
+admin.site.register(TryoutRank)
+admin.site.register(TotalRank)

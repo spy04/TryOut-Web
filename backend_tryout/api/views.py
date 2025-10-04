@@ -5,12 +5,17 @@ from .models import CustomUser
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import *
 from rest_framework.response import Response
-from rest_framework import generics, permissions, status
+from rest_framework import generics, permissions, status, viewsets
 from django.core.cache import cache
-from rest_framework.views import APIView
+from rest_framework.views import APIView 
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny
+from datetime import datetime, timedelta
+import pytz
+
+
+from django.shortcuts import get_object_or_404
 
 from django.core.files.storage import default_storage
 
@@ -70,8 +75,7 @@ class UserDetailUpdateView(generics.RetrieveUpdateAPIView):
         return self.request.user  # Menggunakan request.user untuk mengambil user yang sedang login
 
 
-class SubscriptionView(generics.ListAPIView):
-    serializer_class = HargaSerializer
+
 
 class RegisterView(APIView):
     def post(self, request):
@@ -167,7 +171,59 @@ class TryoutListView(generics.ListAPIView):
     queryset = Tryout.objects.all()
     serializer_class = TryoutSerializer
     permission_classes = [permissions.IsAuthenticated]
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context["request"] = self.request
+        return context
     
+
+from rest_framework.generics import RetrieveAPIView
+
+class TryoutSessionDetailView(RetrieveAPIView):
+    queryset = TryoutSession.objects.all()
+    serializer_class = TryoutSessionSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        user = self.request.user
+        tryout_id = self.kwargs['tryout_id']
+        return TryoutSession.objects.get(user=user, tryout_id=tryout_id)
+    
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def start_tryout_session(request, tryout_id):
+    user = request.user
+    tryout = get_object_or_404(Tryout, id=tryout_id)
+    session, created = TryoutSession.objects.get_or_create(user=user, tryout=tryout)
+    if created:
+        session.start_date = timezone.now()
+        session.finished = False
+        session.save()
+
+    serializer = TryoutSessionSerializer(session)
+    return Response(serializer.data)
+
+# @api_view(["GET"])
+# @permission_classes([IsAuthenticated])
+# def tryout_result(request, tryout_id):
+#     answers = UserAnswer.objects.filter(
+#         user=request.user, question__tryout_id=tryout_id
+#     )
+#     serializer = UserAnswerReviewSerializer(answers, many=True)
+
+#     summary = {
+#         "total": answers.count(),
+#         "correct": answers.filter(is_correct=True).count(),
+#         "wrong": answers.filter(is_correct=False).count(),
+#     }
+
+#     return Response({
+#         "summary": summary,
+#         "answers": serializer.data   # <- disini harus serializer.data
+#     })
+
 
 class QuestionListView(generics.ListAPIView):
     serializer_class = QuestionSerializer
@@ -201,16 +257,19 @@ class DraftAnswerView(generics.GenericAPIView):
 
         UserAnswer.objects.bulk_create(objs, ignore_conflicts=True)
         return Response({"message": "Draft saved"}, status=200)
-
+    
 class TryoutResultView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, tryout_id):
+        # filter jawaban user yg udah submit
         answers = UserAnswer.objects.filter(
             user=request.user,
             question__tryout_id=tryout_id,
             submitted=True
         )
+
+        serializer = UserAnswerReviewSerializer(answers, many=True)
 
         total = answers.count()
         correct = answers.filter(is_correct=True).count()
@@ -218,29 +277,45 @@ class TryoutResultView(APIView):
 
         return Response({
             "tryout_id": tryout_id,
-            "total": total,
-            "correct": correct,
-            "wrong": wrong
+            "summary": {
+                "total": total,
+                "correct": correct,
+                "wrong": wrong,
+            },
+            "answers": serializer.data  # kasih detail tiap jawaban
         })
 
 
-   
 class SubmitTryoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, tryout_id):
-        answers = request.data  # {question_id: "A", ...}
+        user = request.user
+        tryout = get_object_or_404(Tryout, id=tryout_id)
+
+        # ambil atau buat session
+        session, _ = TryoutSession.objects.get_or_create(user=user, tryout=tryout)
+
+        if session.finished:
+            return Response({"detail": "Tryout sudah disubmit, tidak bisa diulang."}, status=400)
+
+        answers = request.data  # format: {question_id: "A", ...}
         results = []
+        correct_count = 0
 
         for q_id, selected in answers.items():
-            ua, _ = UserAnswer.objects.get_or_create(
-                user=request.user,
-                question_id=q_id
-            )
+            try:
+                ua = UserAnswer.objects.get(user=user, question_id=q_id)
+            except UserAnswer.DoesNotExist:
+                ua = UserAnswer(user=user, question_id=q_id)
+
             ua.selected_option = selected
             ua.submitted = True
             ua.is_correct = (ua.question.answer == selected)
             ua.save()
+
+            if ua.is_correct:
+                correct_count += 1
 
             results.append({
                 "question_id": q_id,
@@ -250,11 +325,45 @@ class SubmitTryoutView(APIView):
                 "answered_at": ua.answered_at
             })
 
+        # selesaiin session
+        session.finished = True
+        session.end_date = timezone.now()
+        session.save()
+
+        # update TryoutRank dengan jumlah jawaban benar
+        TryoutRank.objects.update_or_create(
+            user=user,
+            tryout=tryout,
+            defaults={"score": correct_count}
+        )
+
+        # total score semua tryout user
+        total_score_tryouts = TryoutRank.objects.filter(user=user).aggregate(
+            total=models.Sum("score")
+        )["total"] or 0
+
+        # total score latihan user
+        total_score_latihan = LatihanUserAnswer.objects.filter(
+            user=user,
+            submitted_latihan_soal=True,
+            is_correct_latihan_soal=True
+        ).count()
+
+        # gabungkan total score
+        total_score = total_score_tryouts + total_score_latihan
+
+        # simpan total score ke TotalRank
+        TotalRank.objects.update_or_create(
+            user=user,
+            defaults={"total_score": total_score}
+        )
+
         return Response({
             "tryout_id": tryout_id,
-            "results": results
+            "results": results,
+            "score": correct_count,
+            "total_score": total_score
         })
-
 
 
 class PracticeTestViewSet(generics.ListAPIView):
@@ -330,8 +439,6 @@ class LatihanResultView(APIView):
             "correct": correct,
             "wrong": wrong
         })
-
-
 class SubmitLatihanView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -340,14 +447,12 @@ class SubmitLatihanView(APIView):
         results = []
 
         for question_id, selected in answers.items():
-            # Menyimpan atau mengambil jawaban dari User
             ua, created = LatihanUserAnswer.objects.get_or_create(
                 user=request.user,
                 question_latihan_soal_id=question_id
             )
             ua.selected_option_latihan_soal = selected
             ua.submitted_latihan_soal = True
-            # Mengecek apakah jawaban benar
             ua.is_correct_latihan_soal = (ua.question_latihan_soal.answer_latihan == selected)
             ua.save()
 
@@ -359,11 +464,36 @@ class SubmitLatihanView(APIView):
                 "answered_at": ua.answered_at_latihan_soal
             })
 
+        # ✅ Update total score user
+        total_score_tryouts = TryoutRank.objects.filter(user=request.user).aggregate(
+            total=models.Sum("score")
+        )["total"] or 0
+
+        total_score_latihan = LatihanUserAnswer.objects.filter(
+            user=request.user,
+            submitted_latihan_soal=True
+        ).aggregate(
+            total=models.Sum(
+                models.Case(
+                    models.When(is_correct_latihan_soal=True, then=1),
+                    default=0,
+                    output_field=models.IntegerField()
+                )
+            )
+        )["total"] or 0
+
+        total_score = total_score_tryouts + total_score_latihan
+
+        TotalRank.objects.update_or_create(
+            user=request.user,
+            defaults={"total_score": total_score}
+        )
+
         return Response({
             "latihan_id": latihan_id,
-            "results": results
+            "results": results,
+            "total_score": total_score
         })
-
 
 #admin
 class TryoutUploadView(APIView):
@@ -473,19 +603,38 @@ import midtransclient
 User = get_user_model()
 
 
+def get_price_after_discount(subscription):
+    now = timezone.now()
+    # cek diskon aktif
+    active_discount = subscription.discounts.filter(
+        start_date__lte=now,
+        end_date__gte=now
+    ).first()
+    
+    if active_discount and active_discount.percentage:
+        harga_final = subscription.harga * (100 - active_discount.percentage) / 100
+        return subscription.harga, active_discount.percentage, int(harga_final)
+    return subscription.harga, None, subscription.harga
+
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_transaction(request):
     user = request.user
-    amount = int(request.data.get("amount", 100000))  # default 100k
+    sub_id = request.data.get("subscription_id")
+    sub = Subscription.objects.get(id=sub_id)
+
+    harga_normal, diskon, harga_final = get_price_after_discount(sub)
 
     order_id = f"order-{user.id}-{uuid.uuid4().hex[:8]}"
 
     # simpan transaction di DB
     trx = Transaction.objects.create(
         user=user,
+        subscription=sub, 
         order_id=order_id,
-        amount=amount,
+        amount=harga_final,
         status="pending"
     )
 
@@ -499,7 +648,7 @@ def create_transaction(request):
     param = {
         "transaction_details": {
             "order_id": order_id,
-            "gross_amount": amount,
+            "gross_amount": harga_final,
         },
         "customer_details": {
             "first_name": user.first_name or "Guest",
@@ -511,45 +660,74 @@ def create_transaction(request):
 
     return Response({
         "order_id": trx.order_id,
+        "subscription": {
+            "id": sub.id,
+            "title": sub.title,
+            "harga_normal": harga_normal,
+            "diskon": diskon,
+            "harga_final": harga_final
+        },
         "token": transaction["token"],
         "redirect_url": transaction["redirect_url"]
     })
 
 
 @api_view(["POST"])
-@permission_classes([AllowAny])  # Midtrans bisa akses tanpa login
+@permission_classes([AllowAny])
 def payment_notification(request):
     notif = request.data
+    print("Notif received:", notif)
+
     order_id = notif.get("order_id")
     transaction_status = notif.get("transaction_status")
+    settlement_time_str = notif.get("settlement_time")  # dari Midtrans
 
     if not order_id or not transaction_status:
         return Response({"status": "error", "message": "Missing order_id or transaction_status"}, status=400)
 
     try:
         trx = Transaction.objects.get(order_id=order_id)
-        trx.status = transaction_status
-        trx.save()
+        trx.status = transaction_status.lower()
 
-        profile, _ = Profile.objects.get_or_create(user=trx.user)
+        # tentukan waktu mulai
+        if settlement_time_str:
+            settlement_time = datetime.strptime(settlement_time_str, "%Y-%m-%d %H:%M:%S")
+            settlement_time = pytz.timezone("Asia/Jakarta").localize(settlement_time)
+        else:
+            settlement_time = timezone.now()
 
-        if transaction_status == "settlement":
+        # update transaction jika settlement
+        if transaction_status.lower() == "settlement":
+            trx.start_date = settlement_time
+            if trx.subscription:
+                trx.end_date = settlement_time + timedelta(days=trx.subscription.duration_days)
+            else:
+                trx.end_date = settlement_time + timedelta(days=30)  # default
+            trx.save()
+
+            # update profile
+            profile, _ = Profile.objects.get_or_create(user=trx.user)
             profile.is_pro = True
+            profile.start_date = trx.start_date
+            profile.end_date = trx.end_date
             profile.save()
+
             return Response({"status": "success", "message": "User upgraded to PRO"})
 
-        elif transaction_status in ["cancel", "deny", "expire"]:
+        elif transaction_status.lower() in ["cancel", "deny", "expire"]:
+            trx.save()  # update status di transaction
+            profile, _ = Profile.objects.get_or_create(user=trx.user)
             profile.is_pro = False
             profile.save()
             return Response({"status": "failed", "message": "Payment failed"})
 
         else:
+            trx.save()
             return Response({"status": "pending", "message": "Payment pending"})
 
     except Transaction.DoesNotExist:
         return Response({"status": "error", "message": "Invalid order_id"}, status=400)
-
-
+    
 class TryoutRankListView(generics.ListAPIView):
     serializer_class = TryoutRankSerializer
     permission_classes = [IsAuthenticated]
@@ -561,6 +739,193 @@ class TryoutRankListView(generics.ListAPIView):
 
 # ✅ Ranking total semua soal
 class TotalRankListView(generics.ListAPIView):
-    queryset = TotalRank.objects.all().order_by("-total_score")
     serializer_class = TotalRankSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return TotalRank.objects.all().order_by("-total_score")
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        rank_labels = {
+            1: "GOD",
+            2: "LEGEND",
+            3: "MASTER",
+            4: "ELITE",
+            5: "PRO",
+        }
+        data = []
+        for i, rank in enumerate(queryset, start=1):
+            user = rank.user
+            profile = getattr(user, "profile", None)
+
+            # Hitung total benar & total soal
+            total_benar_tryout = UserAnswer.objects.filter(user=user, submitted=True, is_correct=True).count()
+            total_soal_tryout = UserAnswer.objects.filter(user=user, submitted=True).count()
+            total_benar_latihan = LatihanUserAnswer.objects.filter(user=user, submitted_latihan_soal=True, is_correct_latihan_soal=True).count()
+            total_soal_latihan = LatihanUserAnswer.objects.filter(user=user, submitted_latihan_soal=True).count()
+
+            total_benar = total_benar_tryout + total_benar_latihan
+            total_soal = total_soal_tryout + total_soal_latihan
+            total_score = round((total_benar / total_soal) * 100, 2) if total_soal else 0
+
+            data.append({
+                "rank": i,
+                "user_id": user.id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "photo": request.build_absolute_uri(profile.photo.url) if profile and profile.photo else None,
+                "total_benar": total_benar,
+                "total_soal": total_soal,
+                "total_score": total_score,
+                "label": rank_labels.get(i, "PLAYER")
+            })
+        return Response(data)
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def user_stats(request):
+    user = request.user
+
+    # ================== LATIHAN (GLOBAL) ==================
+    total_latihan = LatihanUserAnswer.objects.filter(
+        user=user, submitted_latihan_soal=True
+    ).count()
+
+    latihan_benar = LatihanUserAnswer.objects.filter(
+        user=user, submitted_latihan_soal=True, is_correct_latihan_soal=True
+    ).count()
+
+    latihan_salah = LatihanUserAnswer.objects.filter(
+        user=user, submitted_latihan_soal=True, is_correct_latihan_soal=False
+    ).count()
+
+    # ================== TRYOUT (GLOBAL) ==================
+    total_tryout_jawaban = UserAnswer.objects.filter(
+        user=user, submitted=True
+    ).count()
+
+    tryout_benar = UserAnswer.objects.filter(
+        user=user, submitted=True, is_correct=True
+    ).count()
+
+    tryout_salah = UserAnswer.objects.filter(
+        user=user, submitted=True, is_correct=False
+    ).count()
+
+    tryout_selesai = TryoutSession.objects.filter(
+        user=user, finished=True
+    ).count()
+
+    # ================== LATIHAN PER MATERI ==================
+    from django.db.models import Count, Sum, Case, When, IntegerField
+
+    latihan_per_materi = (
+        LatihanUserAnswer.objects
+        .filter(user=user, submitted_latihan_soal=True)
+        .values("question_latihan_soal__latsol__latihan__judul_materi")
+        .annotate(
+            total=Count("id"),
+            benar=Sum(Case(
+                When(is_correct_latihan_soal=True, then=1),
+                default=0,
+                output_field=IntegerField()
+            ))
+        )
+    )
+
+    latihan_per_materi_data = [
+        {
+            "materi": r["question_latihan_soal__latsol__latihan__judul_materi"],
+            "total": r["total"],
+            "benar": r["benar"],
+            "salah": r["total"] - r["benar"]
+        }
+        for r in latihan_per_materi
+    ]
+
+    # ================== RESPONSE ==================
+    data = {
+        # latihan global
+        "latihan_total": total_latihan,
+        "latihan_benar": latihan_benar,
+        "latihan_salah": latihan_salah,
+
+        # tryout global
+        "tryout_total": total_tryout_jawaban,
+        "tryout_benar": tryout_benar,
+        "tryout_salah": tryout_salah,
+        "tryout_selesai": tryout_selesai,
+
+        # latihan per materi
+        "latihan_per_materi": latihan_per_materi_data
+    }
+
+    return Response(data)
+
+class SubscriptionViewSet(viewsets.ReadOnlyModelViewSet):
+    queryset = Subscription.objects.filter(is_active=True)
+    serializer_class = HargaSerializer
+    permission_classes = [AllowAny]
+
+    def list(self, request, *args, **kwargs):
+        subscriptions = self.get_queryset()
+        data = []
+        now = timezone.now()
+
+        for sub in subscriptions:
+            # cek diskon aktif
+            active_discount = sub.discounts.filter(
+                start_date__lte=now, end_date__gte=now
+            ).order_by('-percentage').first()
+
+            harga_final = sub.harga
+            # duration_days = sub.duration_days
+            diskon_info = None
+
+            if active_discount:
+                harga_final = sub.harga - (sub.harga * active_discount.percentage // 100)
+                diskon_info = {
+                    "id": active_discount.id,
+                    "percentage": active_discount.percentage,
+                    "start_date": active_discount.start_date,
+                    "end_date": active_discount.end_date,
+                    "photo": request.build_absolute_uri(active_discount.photo_promo.url) if active_discount.photo_promo else None,
+
+                }
+
+            data.append({
+                "id": sub.id,
+                "nama": sub.title,
+                "duration": sub.duration_days,
+                "deskripsi": sub.description,
+                "harga_asli": sub.harga,
+                "harga_final": harga_final,
+                "diskon": diskon_info,
+            })
+
+        return Response(data)
+
+
+
+# buat diskon baru (opsional, admin-only)
+class DiscountCreateView(generics.CreateAPIView):
+    queryset = Discount.objects.all()
+    serializer_class = serializers.ModelSerializer
+    permission_classes = [IsAuthenticated]
+
+    class TempSerializer(serializers.ModelSerializer):
+        class Meta:
+            model = Discount
+            fields = "__all__"
+
+    serializer_class = TempSerializer
+
+class QuoteViewSet(generics.ListAPIView):
+    queryset = Quote.objects.all()
+    serializer_class = QuoteSerializer
+
+class CountDownViewSet(generics.ListAPIView):
+    queryset = CountdownUTBK.objects.all()
+    serializer_class = CountdownSerializer

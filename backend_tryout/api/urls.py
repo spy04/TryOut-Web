@@ -21,6 +21,10 @@ urlpatterns = [
 
 
     path('tryouts/', TryoutListView.as_view(), name='tryout_list'), 
+    # path("tryout/<int:pk>/", TryoutListView.as_view(), name="tryout-detail"),
+    path('tryouts/<int:tryout_id>/start/', start_tryout_session, name='tryout-start'),
+    path('tryout-session/<int:tryout_id>/', TryoutSessionDetailView.as_view(), name='tryout-session-detail'),
+
     path('questions/', QuestionListView.as_view(), name='questions-list'),
     path('answer/draft/', DraftAnswerView.as_view(), name='answer-draft'),
     path("tryouts/<int:tryout_id>/submit/", SubmitTryoutView.as_view(), name="tryout-submit"),
@@ -62,10 +66,19 @@ urlpatterns = [
     path("create_transaction/", create_transaction, name="create_payment"),
     path("payment-notification/", payment_notification, name="payment_notification"),
 
-    path("subscription/", SubscriptionView.as_view, name="subs"),
+    path("subscription/", SubscriptionViewSet.as_view({'get': 'list'}), name="subs"),
+
+    path("quote/", QuoteViewSet.as_view(), name="quote"),
+    path("countdown/", CountDownViewSet.as_view(), name="countdown"),
+
     path("forgot-password/", request_password_reset, name="forgot-password"),
     path("reset-password/<uid>/<token>/", reset_password, name="reset-password-confirm"),
     
     path("rank/tryout/<int:tryout_id>/", TryoutRankListView.as_view(), name="tryout-rank"),
     path("rank/total/", TotalRankListView.as_view(), name="total-rank"),
+
+    path("stats/", user_stats, name="user-stats"),
+
+
+
 ]

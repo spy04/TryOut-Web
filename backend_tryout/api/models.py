@@ -9,6 +9,7 @@ from django.dispatch import receiver
 import datetime
 from ckeditor_uploader.fields import RichTextUploadingField
 from django.utils.text import slugify
+from datetime import timedelta
 
 
 
@@ -52,17 +53,22 @@ class CustomUser(AbstractUser):
     
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    gender = models.CharField(null=True, blank=True)
     photo = models.ImageField(upload_to='profile_photos/', blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
     asal_sekolah = models.CharField(blank=True, null=True, max_length=255)
     Jurusan = models.CharField(blank=True, null=True, max_length=255)
     tahun_lulus = models.DateField(blank=True, null=True)
     is_pro = models.BooleanField(default=False)
-    
+    start_date = models.DateTimeField(null=True, blank=True)
+    end_date = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
         return self.user.email
+    
+    
     
 
 @receiver(post_save, sender=CustomUser)
@@ -82,14 +88,17 @@ class EmailOTP(models.Model):
     
 
 class Tryout(models.Model):
-    title = models.CharField(max_length=255)  # contoh: "Tryout September"
+    title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
+    duration = models.PositiveIntegerField(default=160)  # menit
     start_time = models.DateTimeField(blank=True, null=True)
     end_time = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return self.title
+        return f"{self.title}"
+
+   
 
 class Question(models.Model):
     tryout = models.ForeignKey(Tryout, on_delete=models.CASCADE, related_name='questions')
@@ -112,6 +121,29 @@ class Question(models.Model):
 
     def __str__(self):
         return f"{self.tryout.title} - {self.text[:50]}"
+
+class TryoutSession(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    tryout = models.ForeignKey(Tryout, on_delete=models.CASCADE)
+    start_date = models.DateTimeField(default=timezone.now)
+    finished = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ('user', 'tryout')
+
+    def remaining_time(self):
+        """Menghitung sisa waktu untuk user ini"""
+        return max(
+            0,
+            int((self.start_date + timedelta(minutes=self.tryout.duration) - timezone.now()).total_seconds())
+        )
+
+    def is_expired(self):
+        return self.remaining_time() <= 0
+
+    def __str__(self):
+        return f"{self.user.email} - {self.tryout.title}"
+
 
 class UserAnswer(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -200,7 +232,6 @@ class LatihanUserAnswer(models.Model):
         return f"{self.user} - {self.question_latihan_soal.id} - {self.selected_option_latihan_soal}"
     
 
-
 class Transaction(models.Model):
     STATUS_CHOICES = [
         ("pending", "Pending"),
@@ -210,19 +241,45 @@ class Transaction(models.Model):
         ("cancel", "Cancel"),
     ]
 
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)  # 🔥 hubungin ke user
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="transactions")
+    subscription = models.ForeignKey("Subscription", on_delete=models.SET_NULL, null=True, blank=True, related_name="transactions")  
     order_id = models.CharField(max_length=100, unique=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    start_date = models.DateTimeField(null=True, blank=True)
+    end_date = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.order_id} - {self.status}"
+        return f"{self.user.email} - {self.subscription} - {self.status}"
+
     
 class Subscription(models.Model):
-    harga = models.IntegerField()
-    diskon = models.IntegerField()
+    title = models.CharField(max_length=100, null=True, blank=True)
+    harga = models.IntegerField(null=True, blank=True)
+    harga_bulan = models.IntegerField(null=True, blank=True)
+    duration_days = models.IntegerField(default=30)
+    description = models.TextField(blank=True, null=True)
+    is_active = models.BooleanField(default=True)
 
+    def __str__(self):
+        return self.title or f"Subscription #{self.id}"
+
+class Discount(models.Model):
+    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name="discounts")
+    percentage = models.IntegerField(null=True, blank=True)  # misal 10 berarti 10%
+    start_date = models.DateTimeField(null=True, blank=True)
+    end_date = models.DateTimeField(null=True, blank=True)
+    photo_promo = models.ImageField(upload_to='promo/', blank=True, null=True)
+
+    def is_valid(self):
+        from django.utils import timezone
+        now = timezone.now()
+        return self.start_date <= now <= self.end_date
+
+    def __str__(self):
+        return f"{self.percentage}% for {self.subscription.title}"
+ 
 
 class TryoutRank(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -248,3 +305,32 @@ class TotalRank(models.Model):
 
     def __str__(self):
         return f"{self.user.email} - {self.total_score}"
+    
+
+class Quote(models.Model):
+    nama = models.CharField(max_length=100)
+    isi = models.CharField()
+
+    def __str__(self):
+        return self.nama
+
+class CountdownUTBK(models.Model):
+    dateUTBK = models.DateField()
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return str(self.dateUTBK)  # atau self.dateUTBK.strftime("%Y-%m-%d")
+
+    
+class Event(models.Model):
+    title = models.CharField(max_length=100)
+    poster = models.ImageField(upload_to='/poster')
+    photo = models.ImageField(upload_to='photo_event')
+    start_date = models.DateField()
+    end_date = models.DateField()
+    time = models.IntegerField()
+    tempat = models.CharField()
+    syarat = models.TextField()
+
+    def __str__(self):
+        return self.title
