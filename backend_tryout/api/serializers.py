@@ -147,21 +147,53 @@ class ResendOTPSerializer(serializers.Serializer):
 
 
 class TryoutSerializer(serializers.ModelSerializer):
+    finished = serializers.SerializerMethodField()
+    question_count = serializers.SerializerMethodField()
+
+
     class Meta:
         model = Tryout
-        fields = ["id", "title", "description"]
+        fields = ["id", "title", "description", "duration", "finished", "question_count"]
+
+    def get_finished(self, obj):
+        user = self.context["request"].user
+        session = TryoutSession.objects.filter(user=user, tryout=obj).first()
+        return session.finished if session else False
+    
+    def get_question_count(self, obj):
+        return obj.questions.count()
 
 
+class TryoutSessionSerializer(serializers.ModelSerializer):
+    remaining_time = serializers.SerializerMethodField()
 
+    class Meta:
+        model = TryoutSession
+        fields = ['id', 'tryout', 'start_date', 'finished', 'remaining_time']
+
+    def get_remaining_time(self, obj):
+        return obj.remaining_time()
+    
+
+class UserAnswerReviewSerializer(serializers.ModelSerializer):
+    question_text = serializers.CharField(source="question.text", read_only=True)
+    correct_choice = serializers.CharField(source="question.answer", read_only=True)
+
+    class Meta:
+        model = UserAnswer
+        fields = [
+            "id",
+            "question_text",
+            "selected_option",   # jawaban user
+            "correct_choice",    # jawaban benar
+            "is_correct",
+        ]
 class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
-        fields = ['photo', 'bio', 'asal_sekolah', 'Jurusan', 'tahun_lulus', 'is_pro']
+        fields = ['photo','gender', 'bio', 'asal_sekolah', 'Jurusan', 'tahun_lulus', 'is_pro', 'end_date', 'start_date']
 
-class HargaSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Subscription
-        fields = '__all__'
+
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
@@ -181,6 +213,8 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
         # Update user
         return super().update(instance, validated_data)
+    
+    
 
 
 
@@ -261,10 +295,6 @@ class MateriSerializer(serializers.ModelSerializer):
    
 
 
-class LatihanSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Latihan
-        fields = '__all__'
 
 
 class LatihanSoalSerializer(serializers.ModelSerializer):
@@ -276,9 +306,49 @@ class LatihanSoalSerializer(serializers.ModelSerializer):
     option_e_image_latihan = serializers.ImageField(use_url=True, required=False)
     explanation_image_latihan = serializers.ImageField(use_url=True, required=False)
 
+    materi = serializers.SerializerMethodField()
+    kategori = serializers.SerializerMethodField()
+
     class Meta:
         model = LatihanSoal
         fields = '__all__'
+
+    def get_materi(self, obj):
+        if obj.latsol and obj.latsol.latihan:  # latsol = Latihan, latihan = Materi
+            return {
+                "id": obj.latsol.latihan.id,
+                "judul_materi": obj.latsol.latihan.judul_materi,
+            }
+        return None
+
+
+
+    def get_kategori(self, obj):
+        if obj.latsol and obj.latsol.latihan and obj.latsol.latihan.practicetest:
+            return {
+                "id": obj.latsol.latihan.practicetest.id,
+                "title_practice": obj.latsol.latihan.practicetest.title_practice,
+            }
+        return None
+
+class LatihanSerializer(serializers.ModelSerializer):
+    
+    materi = MateriSerializer(source='latihan', read_only=True)  # FK ke Materi
+    soal = LatihanSoalSerializer(source='latsol', many=True, read_only=True)  # FK soal
+    kategori = serializers.SerializerMethodField()  # ambil kategori via materi → practicetest
+
+    class Meta:
+        model = Latihan
+        fields = ['id', 'title_latihan', 'kategori', 'materi', 'soal']
+
+    def get_kategori(self, obj):
+        if obj.latihan and obj.latihan.practicetest:
+            return {
+                "id": obj.latihan.practicetest.id,
+                "title_practice": obj.latihan.practicetest.title_practice,
+            }
+        return None
+
 
 class SubmitAnswerSerializer(serializers.Serializer):
     question_id = serializers.IntegerField()
@@ -293,20 +363,32 @@ class SubmitAnswerSerializer(serializers.Serializer):
         return data
 
     def save(self, **kwargs):
+        request = self.context.get('request')  # biar bisa dapet user
         question = self.validated_data['question']
         selected = self.validated_data['selected_option'].upper()
 
-        is_correct = (selected == question.answer)
+        is_correct = (selected == question.answer_latihan)
+
+        # simpan ke jawaban user
+        LatihanUserAnswer.objects.update_or_create(
+            user=request.user,
+            question_latihan_soal=question,
+            defaults={
+                "selected_option_latihan_soal": selected,
+                "is_correct_latihan_soal": is_correct,
+                "submitted_latihan_soal": True
+            }
+        )
 
         return {
             "question_id": question.id,
+            "materi": question.latsol.latihan.judul_materi,  # <<--- akses ke materi
             "selected_option": selected,
             "is_correct": is_correct,
-            "explanation": question.explanation or "No explanation available",
-            "explanation_image": question.explanation_image.url if question.explanation_image else None
+            "explanation": question.explanation_latihan or "No explanation available",
+            "explanation_image": question.explanation_image_latihan.url if question.explanation_image_latihan else None
         }
 
-    
 
 
 #ADMIN
@@ -413,3 +495,25 @@ class TotalRankSerializer(serializers.ModelSerializer):
     class Meta:
         model = TotalRank
         fields = ["id", "user", "user_email", "total_score", "updated_at"]
+
+
+class HargaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subscription
+        fields = '__all__'
+
+class DiscountSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Discount
+        fields = '__all__'
+
+
+class QuoteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Quote
+        fields = '__all__'
+
+class CountdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CountdownUTBK
+        fields = '__all__'
