@@ -324,7 +324,7 @@ class CountdownUTBK(models.Model):
     
 class Event(models.Model):
     title = models.CharField(max_length=100)
-    poster = models.ImageField(upload_to='/poster')
+    poster = models.ImageField(upload_to='poster/')
     photo = models.ImageField(upload_to='photo_event')
     start_date = models.DateField()
     end_date = models.DateField()
