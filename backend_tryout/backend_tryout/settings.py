@@ -126,7 +126,7 @@ MIDTRANS_IS_PRODUCTION = False  # True kalau udah live
 
 FRONTEND_URL = "https://api.pintuniv.com/"
 
-
+DEFAULT_CHARSET = 'utf-8'
 
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = "smtp.gmail.com"
