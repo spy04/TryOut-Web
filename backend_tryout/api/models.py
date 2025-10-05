@@ -175,7 +175,6 @@ class Materi(models.Model):
     image_materi = models.ImageField(upload_to='materi_image/', blank=True, null=True)
     created_at_materi = models.DateTimeField(auto_now_add=True)
     updated_at_materi = models.DateTimeField(auto_now=True)
-    penulis_materi = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
 
 
     def save(self, *args, **kwargs):

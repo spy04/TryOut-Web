@@ -124,7 +124,7 @@ MIDTRANS_SERVER_KEY = "Mid-server-9z_jnfDecklmiUaWb888xNjy"
 MIDTRANS_CLIENT_KEY = "Mid-client-OffzhkozpZ_Ez42u"
 MIDTRANS_IS_PRODUCTION = False  # True kalau udah live
 
-FRONTEND_URL = "http://localhost:3000/"
+FRONTEND_URL = "https://api.pintuniv.com/"
 
 
 
