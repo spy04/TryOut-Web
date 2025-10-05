@@ -290,7 +290,7 @@ class MateriSerializer(serializers.ModelSerializer):
    
     class Meta:
         model = Materi
-        fields = ['id', 'judul_materi', 'slug_materi', 'konten_materi', 'image_materi', 'practicetest', 'penulis_materi']
+        fields = ['id', 'judul_materi', 'slug_materi', 'konten_materi', 'image_materi', 'practicetest']
 
    
 
