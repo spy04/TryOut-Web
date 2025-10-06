@@ -29,7 +29,7 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 
 def send_password_reset_email(user, reset_link, ip, device):
-    html_content = render_to_string("reset_email.html", {
+    html_content = render_to_string("reset_password.html", {
         "email": user.email,
         "reset_link": reset_link,
         "ip": ip,
