@@ -53,7 +53,7 @@ class CustomUser(AbstractUser):
     
 class Profile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    gender = models.CharField(null=True, blank=True)
+    gender = models.CharField(null=True, blank=True, max_length=10)
     photo = models.ImageField(upload_to='profile_photos/', blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
     asal_sekolah = models.CharField(blank=True, null=True, max_length=255)
@@ -243,7 +243,7 @@ class Transaction(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="transactions")
     subscription = models.ForeignKey("Subscription", on_delete=models.SET_NULL, null=True, blank=True, related_name="transactions")  
     order_id = models.CharField(max_length=100, unique=True)
-    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
     start_date = models.DateTimeField(null=True, blank=True)
     end_date = models.DateTimeField(null=True, blank=True)
@@ -308,7 +308,7 @@ class TotalRank(models.Model):
 
 class Quote(models.Model):
     nama = models.CharField(max_length=100)
-    isi = models.CharField()
+    isi = models.CharField(max_length=500)
 
     def __str__(self):
         return self.nama
@@ -328,7 +328,7 @@ class Event(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     time = models.IntegerField()
-    tempat = models.CharField()
+    tempat = models.CharField(max_length=255)
     syarat = models.TextField()
 
     def __str__(self):
