@@ -25,21 +25,20 @@ Tim TryoutSNBT""",
     return otp
 
 
+from django.core.mail import send_mail
 from django.template.loader import render_to_string
-from django.core.mail import EmailMultiAlternatives
 
-def send_password_reset_email(user, reset_link):
-    subject = "Reset Password Akunmu"
-    from_email = "noreply@yourapp.com"
-    to = [user.email]
-
-    html_content = render_to_string("reset_password.html", {
+def send_password_reset_email(user, reset_link, ip, device):
+    html_content = render_to_string("reset_email.html", {
+        "email": user.email,
         "reset_link": reset_link,
-        "user": user,
+        "ip": ip,
+        "device": device
     })
-
-    text_content = f"Klik link berikut untuk reset password: {reset_link}"
-
-    msg = EmailMultiAlternatives(subject, text_content, from_email, to)
-    msg.attach_alternative(html_content, "text/html")
-    msg.send()
+    send_mail(
+        subject="Reset Password Akunmu",
+        message="",
+        from_email="no-reply@domain.com",
+        recipient_list=[user.email],
+        html_message=html_content
+    )

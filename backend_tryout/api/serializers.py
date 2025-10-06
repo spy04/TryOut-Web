@@ -35,9 +35,14 @@ class PasswordResetRequestSerializer(serializers.Serializer):
         uid = urlsafe_base64_encode(force_bytes(user.pk))
         reset_link = f"{settings.FRONTEND_URL}reset-password/{uid}/{token}/"
 
+        # ambil IP & device dari context
+        request = self.context.get("request")
+        ip = request.META.get("REMOTE_ADDR") if request else "Unknown IP"
+        device = request.META.get("HTTP_USER_AGENT") if request else "Unknown device"
 
-        send_password_reset_email(user, reset_link)
+        send_password_reset_email(user, reset_link, ip, device)
         return {"message": "Link reset password sudah dikirim ke email"}
+
 
 
 class SetNewPasswordSerializer(serializers.Serializer):

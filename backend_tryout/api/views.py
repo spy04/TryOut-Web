@@ -34,10 +34,11 @@ User = get_user_model()
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def request_password_reset(request):
-    serializer = PasswordResetRequestSerializer(data=request.data)
+    serializer = PasswordResetRequestSerializer(data=request.data, context={'request': request})
     serializer.is_valid(raise_exception=True)
     serializer.save()
     return Response({"message": "Link reset password terkirim ke email"})
+
 
 @permission_classes([AllowAny])
 @api_view(["POST"])
