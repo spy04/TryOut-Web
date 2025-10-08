@@ -36,10 +36,8 @@ User = get_user_model()
 def request_password_reset(request):
     serializer = PasswordResetRequestSerializer(data=request.data, context={'request': request})
     serializer.is_valid(raise_exception=True)
-    serializer.save()  # di sini email sudah dikirim
-
+    serializer.save()
     return Response({"message": "Link reset password terkirim ke email"})
-
 
 
 @permission_classes([AllowAny])
@@ -88,8 +86,7 @@ class RegisterView(APIView):
         if user:
             if not user.is_active:
                 # user ada tapi belum aktif → kirim ulang OTP
-                otp = send_otp_email(user.email, user.first_name or "User")
-
+                otp = send_otp_email(user.email)
                 user.otp_code = otp
                 user.save()
                 return Response({"message": "OTP baru dikirim ke email."}, status=status.HTTP_200_OK)
@@ -149,7 +146,6 @@ def resend_otp(request):
     otp = send_otp_email(user.email)
     EmailOTP.objects.create(user=user, otp=otp)
 
-    
     return Response({"message": "OTP baru telah dikirim"})
 
 class CustomTokenObtainPairView(TokenObtainPairView):

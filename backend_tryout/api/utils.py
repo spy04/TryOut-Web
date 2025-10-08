@@ -17,14 +17,14 @@ def format_user_agent(user_agent_string):
 
 
 # ======= OTP Email =======
-def send_otp_email(user_email, user_name):
+def send_otp_email(user_email):
     """
     Kirim OTP ke email user, ada plain text fallback & HTML version
     """
     otp = str(random.randint(100000, 999999))
 
     # plain text fallback
-    text_message = f"""Hai {user_name}! 👋
+    text_message = f"""Hai {user_email}! 👋
 Kami hanya perlu memastikan kalau ini benar-benar kamu.
 Masukkan kode berikut untuk melanjutkan:
 
@@ -40,7 +40,7 @@ Tim Pintu Universitas
     html_message = f"""
     <html>
       <body>
-        <p>Hai {user_name}! 👋</p>
+        <p>Hai {user_email}! 👋</p>
         <p>Kami hanya perlu memastikan kalau ini benar-benar kamu.</p>
         <p>Masukkan kode berikut untuk melanjutkan:</p>
         <h2 style="color:#152D64;">{otp}</h2>
