@@ -2,8 +2,25 @@
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 import random
+from user_agents import parse
 
+
+# ======= User Agent Formatter =======
+def format_user_agent(user_agent_string):
+    """
+    Ambil string User-Agent, return format: "Browser Version on OS Version"
+    """
+    ua = parse(user_agent_string)
+    browser = f"{ua.browser.family} {ua.browser.version_string}"
+    os = f"{ua.os.family} {ua.os.version_string}"
+    return f"{browser} on {os}"
+
+
+# ======= OTP Email =======
 def send_otp_email(user_email, user_name):
+    """
+    Kirim OTP ke email user, ada plain text fallback & HTML version
+    """
     otp = str(random.randint(100000, 999999))
 
     # plain text fallback
@@ -44,18 +61,22 @@ Tim Pintu Universitas
     return otp
 
 
+# ======= Reset Password Email =======
+def send_password_reset_email(user, reset_link, ip, user_agent_string):
+    """
+    Kirim email reset password, ada HTML tombol & plain text fallback
+    """
+    device_info = format_user_agent(user_agent_string)
 
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
-
-def send_password_reset_email(user, reset_link, ip, device):
+    # HTML email
     html_content = render_to_string("reset_password.html", {
         "email": user.email,
         "reset_link": reset_link,
         "ip": ip,
-        "device": device
+        "device": device_info
     })
 
+    # plain text fallback
     plain_text_content = f"""
 Halo {user.email},
 
@@ -65,17 +86,14 @@ Klik tombol di bawah ini untuk membuat kata sandi baru:
 {reset_link}
 
 Tautan ini aktif selama 30 menit aja ya.
-Kalau kamu nggak merasa minta reset, abaikan aja email ini.
 
 Request dilakukan dari IP: {ip}
-Device / Browser: {device}
+Device / Browser: {device_info}
 
 Kalau kamu tidak meminta reset password, abaikan email ini.
 
-
 Salam hangat,
 Tim Pintu Universitas
-
 """
 
     send_mail(
@@ -85,4 +103,3 @@ Tim Pintu Universitas
         recipient_list=[user.email],
         html_message=html_content    # tombol cantik & HTML
     )
-
