@@ -18,7 +18,7 @@ Kode ini berlaku selama 5 menit dan hanya bisa digunakan sekali.
 
 Salam hangat,
 Tim TryoutSNBT""",
-        from_email="otp.tryoutsnbt@gmail.com",
+        from_email="no-reply@pintuniv.com",
         recipient_list=[user_email],
         fail_silently=False,
     )
@@ -38,7 +38,7 @@ def send_password_reset_email(user, reset_link, ip, device):
     send_mail(
         subject="Reset Password Akunmu",
         message="",
-        from_email="no-reply@domain.com",
+        from_email="no-reply@pintuniv.com",
         recipient_list=[user.email],
         html_message=html_content
     )
