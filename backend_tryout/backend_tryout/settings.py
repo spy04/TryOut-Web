@@ -129,6 +129,30 @@ REST_FRAMEWORK = {
     )
 }
 
+
+
+# -------------------------
+# Session (6 bulan)
+# -------------------------
+SESSION_ENGINE = "django.contrib.sessions.backends.db"  # pakai DB
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30 * 6  # 6 bulan
+SESSION_SAVE_EVERY_REQUEST = True  # reset timeout tiap request
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+
+
+# -------------------------
+# Cache (Database cache)
+# -------------------------
+# Buat tabel cache: python manage.py createcachetable django_cache
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "django_cache",  # nama tabel cache
+    }
+}
+
+
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 # settings.py

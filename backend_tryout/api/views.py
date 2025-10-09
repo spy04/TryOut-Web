@@ -13,6 +13,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny
 from datetime import datetime, timedelta
 import pytz
+from django.core.cache import cache
 
 
 from django.shortcuts import get_object_or_404
@@ -69,13 +70,26 @@ class UserDetailUpdateView(generics.RetrieveUpdateAPIView):
     serializer_class = UserDetailSerializer
     permission_classes = [IsAuthenticated]
 
-    def get_object(self):
-        """
-        Mengambil user berdasarkan token (request.user) yang sedang aktif.
-        """
-        return self.request.user  # Menggunakan request.user untuk mengambil user yang sedang login
+    def retrieve(self, request, *args, **kwargs):
+        user = request.user
+        cache_key = f"user_profile_{user.id}"
 
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            print("⚡ Ambil dari cache")
+            return Response(cached_data)
 
+        serializer = self.get_serializer(user)
+        cache.set(cache_key, serializer.data, timeout=86400)
+        print("💾 Simpan ke cache")
+        return Response(serializer.data)
+
+    def perform_update(self, serializer):
+        user = serializer.save()
+        cache_key = f"user_profile_{user.id}"
+        cache.delete(cache_key)
+        cache.set(cache_key, serializer.data, timeout=86400)
+        print("♻️ Cache diupdate")
 
 
 class RegisterView(APIView):
