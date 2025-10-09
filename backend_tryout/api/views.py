@@ -66,29 +66,35 @@ def delete_inactive_users():
     User.objects.filter(is_active=False, date_joined__lte=cutoff).delete()
 
 class UserDetailUpdateView(generics.RetrieveUpdateAPIView):
-    queryset = CustomUser.objects.all()
     serializer_class = UserDetailSerializer
     permission_classes = [IsAuthenticated]
 
-    def retrieve(self, request, *args, **kwargs):
-        user = request.user
+    def get_object(self):
+        # Ambil user yang login
+        user = self.request.user
         cache_key = f"user_profile_{user.id}"
 
+        # Cek cache
         cached_data = cache.get(cache_key)
         if cached_data:
             print("⚡ Ambil dari cache")
-            return Response(cached_data)
+            return cached_data  # dict siap dikembalikan
 
-        serializer = self.get_serializer(user)
+        # Kalau belum ada, serialize dan simpan cache
+        serializer = self.serializer_class(user)
         cache.set(cache_key, serializer.data, timeout=86400)
         print("💾 Simpan ke cache")
-        return Response(serializer.data)
+        return serializer.data
+
+    def retrieve(self, request, *args, **kwargs):
+        data = self.get_object()
+        return Response(data)
 
     def perform_update(self, serializer):
         user = serializer.save()
         cache_key = f"user_profile_{user.id}"
         cache.delete(cache_key)
-        cache.set(cache_key, serializer.data, timeout=86400)
+        cache.set(cache_key, self.serializer_class(user).data, timeout=86400)
         print("♻️ Cache diupdate")
 
 
