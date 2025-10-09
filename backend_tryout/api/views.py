@@ -70,31 +70,28 @@ class UserDetailUpdateView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_object(self):
-        # Ambil user yang login
-        user = self.request.user
+        # selalu balikin instance model
+        return self.request.user
+
+    def retrieve(self, request, *args, **kwargs):
+        user = self.get_object()
         cache_key = f"user_profile_{user.id}"
 
-        # Cek cache
         cached_data = cache.get(cache_key)
         if cached_data:
             print("⚡ Ambil dari cache")
-            return cached_data  # dict siap dikembalikan
+            return Response(cached_data)
 
-        # Kalau belum ada, serialize dan simpan cache
-        serializer = self.serializer_class(user)
+        serializer = self.get_serializer(user)
         cache.set(cache_key, serializer.data, timeout=86400)
         print("💾 Simpan ke cache")
-        return serializer.data
-
-    def retrieve(self, request, *args, **kwargs):
-        data = self.get_object()
-        return Response(data)
+        return Response(serializer.data)
 
     def perform_update(self, serializer):
         user = serializer.save()
         cache_key = f"user_profile_{user.id}"
         cache.delete(cache_key)
-        cache.set(cache_key, self.serializer_class(user).data, timeout=86400)
+        cache.set(cache_key, self.get_serializer(user).data, timeout=86400)
         print("♻️ Cache diupdate")
 
 
