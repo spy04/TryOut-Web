@@ -79,12 +79,12 @@ class UserDetailUpdateView(generics.RetrieveUpdateAPIView):
 
         cached_data = cache.get(cache_key)
         if cached_data:
-            print("⚡ Ambil dari cache")
+            print("Ambil dari cache")
             return Response(cached_data)
 
         serializer = self.get_serializer(user)
         cache.set(cache_key, serializer.data, timeout=86400)
-        print("💾 Simpan ke cache")
+        print("Simpan ke cache")
         return Response(serializer.data)
 
     def perform_update(self, serializer):
@@ -92,7 +92,7 @@ class UserDetailUpdateView(generics.RetrieveUpdateAPIView):
         cache_key = f"user_profile_{user.id}"
         cache.delete(cache_key)
         cache.set(cache_key, self.get_serializer(user).data, timeout=86400)
-        print("♻️ Cache diupdate")
+        print("Cache diupdate")
 
 
 class RegisterView(APIView):
