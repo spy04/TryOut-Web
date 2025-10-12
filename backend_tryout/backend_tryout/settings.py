@@ -9,12 +9,6 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
-import sys
-sys.setdefaultencoding = getattr(sys, "setdefaultencoding", lambda x: None)
-try:
-    sys.setdefaultencoding("utf-8")
-except Exception:
-    pass
 
 from pathlib import Path
 import os
@@ -104,7 +98,7 @@ DATABASES = {
         'OPTIONS': {
             'charset': 'utf8mb4',
             'use_unicode': True,  
-            'init_command': "SET NAMES 'utf8mb4' COLLATE 'utf8mb4_0900_ai_ci';", 
+            'init_command': "SET NAMES 'utf8mb4' COLLATE 'utf8mb4_unicode_ci';",
         },
     }
 }
