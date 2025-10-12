@@ -9,6 +9,12 @@ https://docs.djangoproject.com/en/5.2/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
+import sys
+sys.setdefaultencoding = getattr(sys, "setdefaultencoding", lambda x: None)
+try:
+    sys.setdefaultencoding("utf-8")
+except Exception:
+    pass
 
 from pathlib import Path
 import os
