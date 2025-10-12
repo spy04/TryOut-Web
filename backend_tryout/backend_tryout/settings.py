@@ -90,16 +90,19 @@ WSGI_APPLICATION = 'backend_tryout.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'pintuniv_db',         # dari wizard
-        'USER': 'pintuniv_db',       # dari wizard
-        'PASSWORD': 'pintunivDB1', # dari wizard
-        'HOST': 'localhost',         # biasanya localhost
+        'NAME': 'pintuniv_db',
+        'USER': 'pintuniv_db',
+        'PASSWORD': 'pintunivDB1',
+        'HOST': 'localhost',
         'PORT': '3306',
         'OPTIONS': {
-            'charset': 'utf8mb4',    # penting untuk Unicode
+            'charset': 'utf8mb4',
+            'use_unicode': True,  
+            'init_command': "SET NAMES 'utf8mb4' COLLATE 'utf8mb4_0900_ai_ci';", 
         },
     }
 }
+
 
 
 
@@ -135,22 +138,12 @@ REST_FRAMEWORK = {
 # Session (6 bulan)
 # -------------------------
 SESSION_ENGINE = "django.contrib.sessions.backends.db"  # pakai DB
-SESSION_COOKIE_AGE = 60 * 60 * 24 * 30 * 6  # 6 bulan
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 30 * 1  # 6 bulan
 SESSION_SAVE_EVERY_REQUEST = True  # reset timeout tiap request
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 
 
 
-# -------------------------
-# Cache (Database cache)
-# -------------------------
-# Buat tabel cache: python manage.py createcachetable django_cache
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
-        "LOCATION": "django_cache",  # nama tabel cache
-    }
-}
 
 
 # Internationalization
