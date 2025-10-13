@@ -149,9 +149,10 @@ SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 # Internationalization
 # https://docs.djangoproject.com/en/5.2/topics/i18n/
 # settings.py
-MIDTRANS_SERVER_KEY = "Mid-server-9z_jnfDecklmiUaWb888xNjy"
-MIDTRANS_CLIENT_KEY = "Mid-client-OffzhkozpZ_Ez42u"
-MIDTRANS_IS_PRODUCTION = False  # True kalau udah live
+MIDTRANS_SERVER_KEY = os.getenv("MIDTRANS_SERVER_KEY")
+MIDTRANS_CLIENT_KEY = os.getenv("MIDTRANS_CLIENT_KEY")
+MIDTRANS_IS_PRODUCTION = os.getenv("MIDTRANS_IS_PRODUCTION") == "True" 
+
 
 FRONTEND_URL = "https://pintuniv.com/"
 
