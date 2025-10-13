@@ -522,3 +522,8 @@ class CountdownSerializer(serializers.ModelSerializer):
     class Meta:
         model = CountdownUTBK
         fields = '__all__'
+
+class EventSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Event
+        fields = '__all__'

@@ -931,3 +931,8 @@ class QuoteViewSet(generics.ListAPIView):
 class CountDownViewSet(generics.ListAPIView):
     queryset = CountdownUTBK.objects.all()
     serializer_class = CountdownSerializer
+
+
+class EventViewSet(generics.ListAPIView):
+    queryset = Event.objects.all()
+    serializer_class = EventSerializer

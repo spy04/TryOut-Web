@@ -70,6 +70,8 @@ urlpatterns = [
 
     path("quote/", QuoteViewSet.as_view(), name="quote"),
     path("countdown/", CountDownViewSet.as_view(), name="countdown"),
+    path("event/", EventViewSet.as_view(), name="event"),
+
 
     path("forgot-password/", request_password_reset, name="forgot-password"),
     path("reset-password/<uid>/<token>/", reset_password, name="reset-password-confirm"),
