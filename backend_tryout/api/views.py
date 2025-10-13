@@ -642,7 +642,7 @@ def create_transaction(request):
 
     # setup Midtrans Snap
     snap = midtransclient.Snap(
-        is_production=False,
+        is_production=settings.MIDTRANS_IS_PRODUCTION,  
         server_key=settings.MIDTRANS_SERVER_KEY,
         client_key=settings.MIDTRANS_CLIENT_KEY
     )
