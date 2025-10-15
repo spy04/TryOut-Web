@@ -163,7 +163,6 @@ class TryoutQuestionBulkUploadView(APIView):
                     option_c_image=clean_val(row.get("option_c_image"), is_image=True),
                     option_d=clean_val(row.get("option_d")),
                     option_d_image=clean_val(row.get("option_d_image"), is_image=True),
-                    answer=clean_val(row.get("answer")) or "A",
                     option_e=clean_val(row.get("option_e")),
                     option_e_image=clean_val(row.get("option_e_image"), is_image=True),
                     answer=clean_val(row.get("answer")) or "A",
