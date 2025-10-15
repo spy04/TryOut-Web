@@ -62,15 +62,21 @@ class LatihanSoalBulkUploadView(APIView):
                 return None
             if is_image:
                 val_str = str(val)
+                # Kalau URL, download file
                 if val_str.startswith("http"):
                     try:
                         resp = requests.get(val_str)
                         if resp.status_code == 200:
+                            # Ambil nama file dari URL
                             filename = os.path.basename(urlparse(val_str).path)
+                            # Pastikan ada ekstensi jpg/png
+                            if not os.path.splitext(filename)[1]:
+                                filename += ".jpg"  # default
                             return ContentFile(resp.content, name=filename)
-                    except:
+                    except Exception as e:
+                        print(f"Gagal download {val_str}: {e}")
                         return None
-                return None
+                return None  # kalau bukan URL, abaikan
             return str(val)
 
         for idx, row in df.iterrows():
@@ -99,7 +105,7 @@ class LatihanSoalBulkUploadView(APIView):
                 errors.append(f"Row {idx + 2}: {str(e)}")
 
         return Response({"created": created_count, "errors": errors}, status=201)
-
+    
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def request_password_reset(request):
