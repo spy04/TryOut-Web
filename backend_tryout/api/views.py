@@ -31,22 +31,17 @@ import pandas as pd
 
 
 User = get_user_model()
-import pandas as pd
-from rest_framework.views import APIView
-from rest_framework.response import Response
-from rest_framework import permissions, status
-from rest_framework.parsers import MultiPartParser, FormParser, FileUploadParser
-from .models import Latihan, LatihanSoal
-
 class LatihanSoalBulkUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser, FileUploadParser]
     permission_classes = [permissions.IsAuthenticated]
 
     def clean_val(self, val):
-        """Convert NaN/float to None for Django fields."""
+        """Convert NaN / empty cell to None for Django fields"""
         if pd.isna(val):
             return None
-        return val
+        if isinstance(val, float):
+            return None
+        return str(val)
 
     def post(self, request, format=None):
         latihan_id = request.data.get("latihan_id")
@@ -60,11 +55,11 @@ class LatihanSoalBulkUploadView(APIView):
         except Latihan.DoesNotExist:
             return Response({"error": "Latihan not found"}, status=404)
 
-        # Baca CSV atau Excel
+        # Baca CSV / Excel
         if file.name.endswith(".xlsx"):
             df = pd.read_excel(file)
         else:
-            df = pd.read_csv(file)  # jika tab-delimited: pd.read_csv(file, sep="\t")
+            df = pd.read_csv(file, sep="\t")  # sep="\t" untuk CSV dari spreadsheet tab-delimited
 
         created_count = 0
         errors = []
@@ -87,18 +82,17 @@ class LatihanSoalBulkUploadView(APIView):
                     answer_latihan=self.clean_val(row.get("answer_latihan")) or "A",
                     explanation_latihan=self.clean_val(row.get("explanation_latihan")),
                     explanation_image_latihan=self.clean_val(row.get("explanation_image_latihan")),
-                    image_latihan=self.clean_val(row.get("image_latihan"))
+                    image_latihan=self.clean_val(row.get("image_latihan")),
                 )
                 soal.save()
                 created_count += 1
             except Exception as e:
-                errors.append(f"Row {idx+2}: {str(e)}")  # +2 karena header + 0-index
+                errors.append(f"Row {idx + 2}: {str(e)}")  # +2 karena header + 0-index
 
         return Response({
             "created": created_count,
             "errors": errors
         }, status=201)
-
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
