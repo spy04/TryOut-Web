@@ -39,7 +39,7 @@ class LatihanSoalBulkUploadView(APIView):
     Gambar semua kolom pakai URL (tidak upload file).
     CSV/Excel tidak disimpan di server.
     """
-    parser_classes = []  # CSV/Excel langsung dibaca
+    parser_classes = [MultiPartParser, FormParser]  # CSV/Excel langsung dibaca
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
