@@ -30,6 +30,7 @@ urlpatterns = [
     path("tryouts/<int:tryout_id>/submit/", SubmitTryoutView.as_view(), name="tryout-submit"),
     path("tryouts/<int:tryout_id>/result/", TryoutResultView.as_view(), name="tryout-result"),
 
+    path('latihan-soal/bulk-upload/', LatihanSoalBulkUploadView.as_view(), name='latihan-soal-bulk-upload'),
 
 
 

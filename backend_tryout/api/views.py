@@ -27,10 +27,71 @@ from django.utils import timezone
 from datetime import timedelta
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.tokens import default_token_generator
+import pandas as pd
+
 
 User = get_user_model()
 
+class LatihanSoalBulkUploadView(APIView):
+    """
+    Endpoint batch upload LatihanSoal dari CSV/Excel.
+    Admin pilih latihan (latihan_id dari frontend) dan upload file.
+    Gambar semua kolom pakai URL (tidak upload file).
+    CSV/Excel tidak disimpan di server.
+    """
+    parser_classes = []  # CSV/Excel langsung dibaca
+    permission_classes = [permissions.IsAuthenticated]
 
+    def post(self, request):
+        latihan_id = request.data.get("latihan_id")
+        file = request.FILES.get("file")
+
+        if not latihan_id or not file:
+            return Response({"error": "latihan_id and file required"}, status=400)
+
+        try:
+            latihan = Latihan.objects.get(id=latihan_id)
+        except Latihan.DoesNotExist:
+            return Response({"error": "Latihan not found"}, status=404)
+
+        # Baca CSV atau Excel
+        if file.name.endswith(".xlsx"):
+            df = pd.read_excel(file)
+        else:
+            df = pd.read_csv(file)
+
+        created_count = 0
+        errors = []
+
+        for idx, row in df.iterrows():
+            try:
+                soal = LatihanSoal(
+                    latsol=latihan,
+                    text_latihan=row.get("text_latihan",""),
+                    option_a_latihan=row.get("option_a_latihan",""),
+                    option_a_image_latihan=row.get("option_a_image_latihan", None),
+                    option_b_latihan=row.get("option_b_latihan",""),
+                    option_b_image_latihan=row.get("option_b_image_latihan", None),
+                    option_c_latihan=row.get("option_c_latihan",""),
+                    option_c_image_latihan=row.get("option_c_image_latihan", None),
+                    option_d_latihan=row.get("option_d_latihan",""),
+                    option_d_image_latihan=row.get("option_d_image_latihan", None),
+                    option_e_latihan=row.get("option_e_latihan",""),
+                    option_e_image_latihan=row.get("option_e_image_latihan", None),
+                    answer_latihan=row.get("answer_latihan","A"),
+                    explanation_latihan=row.get("explanation_latihan",""),
+                    explanation_image_latihan=row.get("explanation_image_latihan", None),
+                    image_latihan=row.get("image_latihan", None)
+                )
+                soal.save()
+                created_count += 1
+            except Exception as e:
+                errors.append(f"Row {idx+2}: {str(e)}")  # +2 karena header + 0-index
+
+        return Response({
+            "created": created_count,
+            "errors": errors
+        }, status=201)
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
