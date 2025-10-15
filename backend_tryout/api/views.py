@@ -32,21 +32,12 @@ import pandas as pd
 
 User = get_user_model()
 class LatihanSoalBulkUploadView(APIView):
-    parser_classes = [MultiPartParser, FormParser, FileUploadParser]
+    parser_classes = [MultiPartParser, FormParser]
     permission_classes = [permissions.IsAuthenticated]
-
-    def clean_val(self, val):
-        """Convert NaN / empty cell to None for Django fields"""
-        if pd.isna(val):
-            return None
-        if isinstance(val, float):
-            return None
-        return str(val)
 
     def post(self, request, format=None):
         latihan_id = request.data.get("latihan_id")
         file = request.FILES.get("file")
-
         if not latihan_id or not file:
             return Response({"error": "latihan_id and file required"}, status=400)
 
@@ -55,44 +46,57 @@ class LatihanSoalBulkUploadView(APIView):
         except Latihan.DoesNotExist:
             return Response({"error": "Latihan not found"}, status=404)
 
-        # Baca CSV / Excel
+        # Baca Excel/CSV
         if file.name.endswith(".xlsx"):
             df = pd.read_excel(file)
         else:
-            df = pd.read_csv(file, sep="\t")  # sep="\t" untuk CSV dari spreadsheet tab-delimited
+            df = pd.read_csv(file, sep="\t")
 
         created_count = 0
         errors = []
+
+        def clean_val(val, is_image=False):
+            if pd.isna(val) or val == "":
+                return None
+            if is_image:
+                val_str = str(val)
+                if val_str.startswith("http"):
+                    try:
+                        resp = requests.get(val_str)
+                        if resp.status_code == 200:
+                            filename = os.path.basename(urlparse(val_str).path)
+                            return ContentFile(resp.content, name=filename)
+                    except:
+                        return None
+                return None
+            return str(val)
 
         for idx, row in df.iterrows():
             try:
                 soal = LatihanSoal(
                     latsol=latihan,
-                    text_latihan=self.clean_val(row.get("text_latihan")),
-                    option_a_latihan=self.clean_val(row.get("option_a_latihan")),
-                    option_a_image_latihan=self.clean_val(row.get("option_a_image_latihan")),
-                    option_b_latihan=self.clean_val(row.get("option_b_latihan")),
-                    option_b_image_latihan=self.clean_val(row.get("option_b_image_latihan")),
-                    option_c_latihan=self.clean_val(row.get("option_c_latihan")),
-                    option_c_image_latihan=self.clean_val(row.get("option_c_image_latihan")),
-                    option_d_latihan=self.clean_val(row.get("option_d_latihan")),
-                    option_d_image_latihan=self.clean_val(row.get("option_d_image_latihan")),
-                    option_e_latihan=self.clean_val(row.get("option_e_latihan")),
-                    option_e_image_latihan=self.clean_val(row.get("option_e_image_latihan")),
-                    answer_latihan=self.clean_val(row.get("answer_latihan")) or "A",
-                    explanation_latihan=self.clean_val(row.get("explanation_latihan")),
-                    explanation_image_latihan=self.clean_val(row.get("explanation_image_latihan")),
-                    image_latihan=self.clean_val(row.get("image_latihan")),
+                    text_latihan=clean_val(row.get("text_latihan")),
+                    option_a_latihan=clean_val(row.get("option_a_latihan")),
+                    option_a_image_latihan=clean_val(row.get("option_a_image_latihan"), is_image=True),
+                    option_b_latihan=clean_val(row.get("option_b_latihan")),
+                    option_b_image_latihan=clean_val(row.get("option_b_image_latihan"), is_image=True),
+                    option_c_latihan=clean_val(row.get("option_c_latihan")),
+                    option_c_image_latihan=clean_val(row.get("option_c_image_latihan"), is_image=True),
+                    option_d_latihan=clean_val(row.get("option_d_latihan")),
+                    option_d_image_latihan=clean_val(row.get("option_d_image_latihan"), is_image=True),
+                    option_e_latihan=clean_val(row.get("option_e_latihan")),
+                    option_e_image_latihan=clean_val(row.get("option_e_image_latihan"), is_image=True),
+                    answer_latihan=clean_val(row.get("answer_latihan")) or "A",
+                    explanation_latihan=clean_val(row.get("explanation_latihan")),
+                    explanation_image_latihan=clean_val(row.get("explanation_image_latihan"), is_image=True),
+                    image_latihan=clean_val(row.get("image_latihan"), is_image=True),
                 )
                 soal.save()
                 created_count += 1
             except Exception as e:
-                errors.append(f"Row {idx + 2}: {str(e)}")  # +2 karena header + 0-index
+                errors.append(f"Row {idx + 2}: {str(e)}")
 
-        return Response({
-            "created": created_count,
-            "errors": errors
-        }, status=201)
+        return Response({"created": created_count, "errors": errors}, status=201)
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
