@@ -1,26 +1,26 @@
 from django.shortcuts import render
 
-# Create your views here.
-from .models import CustomUser
+from .models import CustomUser, Transaction, Profile
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import *
 from rest_framework.response import Response
 from rest_framework import generics, permissions, status, viewsets
 from django.core.cache import cache
 from rest_framework.views import APIView 
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import AllowAny
 from datetime import datetime, timedelta
 import pytz
-from django.core.cache import cache
-
+import uuid
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from django.contrib.auth import get_user_model
+import midtransclient
 
 from django.shortcuts import get_object_or_404
 
 from django.core.files.storage import default_storage
 
-from rest_framework.decorators import api_view, permission_classes
 from django.core.files.base import ContentFile
 
 from django.utils import timezone
@@ -179,6 +179,21 @@ class TryoutListView(generics.ListAPIView):
         context["request"] = self.request
         return context
     
+    def get_locked(self, obj):
+        user = self.context["request"].user
+        if not user.is_authenticated:
+            return True
+
+        if getattr(user.profile, 'is_pro', False):
+            return False
+
+        from django.utils import timezone
+        now = timezone.now()
+        first_day = now.replace(day=1, hour=0, minute=0, second=0)
+        count_this_month = TryoutSession.objects.filter(user=user, start_date__gte=first_day).count()
+
+        # kalau udah 2 tryout bulan ini, tryout lain dikunci
+        return count_this_month >= 2
 
 from rest_framework.generics import RetrieveAPIView
 
@@ -594,15 +609,6 @@ def upload_image(request):
 
 
 
-import uuid
-from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
-from rest_framework.response import Response
-from .models import Transaction, Profile
-from django.contrib.auth import get_user_model
-import midtransclient
-
-User = get_user_model()
 
 
 def get_price_after_discount(subscription):

@@ -154,19 +154,40 @@ class ResendOTPSerializer(serializers.Serializer):
 class TryoutSerializer(serializers.ModelSerializer):
     finished = serializers.SerializerMethodField()
     question_count = serializers.SerializerMethodField()
-
+    locked = serializers.SerializerMethodField()  # ✨ tambahkan ini
 
     class Meta:
         model = Tryout
-        fields = ["id", "title", "description", "duration", "finished", "question_count"]
+        fields = ["id", "title", "description", "duration", "finished", "question_count", "locked"]
 
     def get_finished(self, obj):
         user = self.context["request"].user
         session = TryoutSession.objects.filter(user=user, tryout=obj).first()
         return session.finished if session else False
-    
+
     def get_question_count(self, obj):
         return obj.questions.count()
+
+    def get_locked(self, obj):
+        user = self.context["request"].user
+        if not user.is_authenticated:
+            return True
+
+        # kalau user PRO → tidak dikunci
+        if getattr(user.profile, 'is_pro', False):
+            return False
+
+        # kalau user FREE → cek jumlah tryout bulan ini
+        from django.utils import timezone
+        now = timezone.now()
+        first_day = now.replace(day=1, hour=0, minute=0, second=0)
+        count_this_month = TryoutSession.objects.filter(
+            user=user, start_date__gte=first_day
+        ).count()
+
+        # kalau udah 2 tryout bulan ini, tryout lain dikunci
+        return count_this_month >= 2
+
 
 
 class TryoutSessionSerializer(serializers.ModelSerializer):
@@ -292,10 +313,20 @@ class PracticeTestSerializer(serializers.ModelSerializer):
 
 
 class MateriSerializer(serializers.ModelSerializer):
-   
+    is_locked = serializers.SerializerMethodField()
+
     class Meta:
         model = Materi
-        fields = ['id', 'judul_materi', 'slug_materi', 'konten_materi', 'image_materi', 'practicetest']
+        fields = [
+            'id', 'judul_materi', 'slug_materi', 'konten_materi',
+            'image_materi', 'practicetest', 'is_locked'
+        ]
+
+    def get_is_locked(self, obj):
+        user = self.context['request'].user
+        if not user.is_authenticated:
+            return True
+        return not getattr(user.profile, 'is_pro', False)
 
    
 
@@ -337,14 +368,14 @@ class LatihanSoalSerializer(serializers.ModelSerializer):
         return None
 
 class LatihanSerializer(serializers.ModelSerializer):
-    
     materi = MateriSerializer(source='latihan', read_only=True)  # FK ke Materi
-    soal = LatihanSoalSerializer(source='latsol', many=True, read_only=True)  # FK soal
-    kategori = serializers.SerializerMethodField()  # ambil kategori via materi → practicetest
+    soal = LatihanSoalSerializer(source='latsol', many=True, read_only=True)
+    kategori = serializers.SerializerMethodField()
+    locked = serializers.SerializerMethodField()  # ✨ tambahkan field ini
 
     class Meta:
         model = Latihan
-        fields = ['id', 'title_latihan', 'kategori', 'materi', 'soal']
+        fields = ['id', 'title_latihan', 'kategori', 'materi', 'soal', 'locked']
 
     def get_kategori(self, obj):
         if obj.latihan and obj.latihan.practicetest:
@@ -354,6 +385,25 @@ class LatihanSerializer(serializers.ModelSerializer):
             }
         return None
 
+    def get_locked(self, obj):
+        """
+        Lock latihan kalau user free dan sudah lewat batas latihan gratis.
+        """
+        request = self.context.get('request')
+        user = request.user if request else None
+
+        if not user or not user.is_authenticated:
+            return True  # kalau belum login → dikunci semua
+
+        # user PRO => semua latihan terbuka
+        if getattr(user.profile, 'is_pro', False):
+            return False
+
+        # user FREE => tentukan batas gratis
+        # misalnya cuma boleh akses 5 latihan gratis pertama
+        all_latihan = Latihan.objects.filter(latihan=obj.latihan).order_by('id')
+        index = list(all_latihan).index(obj)
+        return index >= 5  # latihan ke-6 dst dikunci
 
 class SubmitAnswerSerializer(serializers.Serializer):
     question_id = serializers.IntegerField()
