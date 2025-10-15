@@ -106,6 +106,73 @@ class LatihanSoalBulkUploadView(APIView):
 
         return Response({"created": created_count, "errors": errors}, status=201)
     
+
+class TryoutQuestionBulkUploadView(APIView):
+    parser_classes = [MultiPartParser, FormParser]
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, format=None):
+        tryout_id = request.data.get("tryout_id")
+        file = request.FILES.get("file")
+        if not tryout_id or not file:
+            return Response({"error": "tryout_id and file required"}, status=400)
+
+        try:
+            tryout = Tryout.objects.get(id=tryout_id)
+        except Tryout.DoesNotExist:
+            return Response({"error": "Tryout not found"}, status=404)
+
+        # Baca Excel/CSV
+        if file.name.endswith(".xlsx"):
+            df = pd.read_excel(file)
+        else:
+            df = pd.read_csv(file, sep="\t")
+
+        created_count = 0
+        errors = []
+
+        def clean_val(val, is_image=False):
+            if pd.isna(val) or val == "":
+                return None
+            if is_image:
+                val_str = str(val)
+                if val_str.startswith("http"):
+                    try:
+                        resp = requests.get(val_str)
+                        if resp.status_code == 200:
+                            filename = os.path.basename(urlparse(val_str).path)
+                            if not os.path.splitext(filename)[1]:
+                                filename += ".jpg"
+                            return ContentFile(resp.content, name=filename)
+                    except Exception as e:
+                        print(f"Failed to download {val_str}: {e}")
+                        return None
+                return None
+            return str(val)
+
+        for idx, row in df.iterrows():
+            try:
+                question = Question(
+                    tryout=tryout,
+                    text=clean_val(row.get("text")),
+                    image=clean_val(row.get("image"), is_image=True),
+                    option_a=clean_val(row.get("option_a")),
+                    option_a_image=clean_val(row.get("option_a_image"), is_image=True),
+                    option_b=clean_val(row.get("option_b")),
+                    option_b_image=clean_val(row.get("option_b_image"), is_image=True),
+                    option_c=clean_val(row.get("option_c")),
+                    option_c_image=clean_val(row.get("option_c_image"), is_image=True),
+                    option_d=clean_val(row.get("option_d")),
+                    option_d_image=clean_val(row.get("option_d_image"), is_image=True),
+                    answer=clean_val(row.get("answer")) or "A",
+                )
+                question.save()
+                created_count += 1
+            except Exception as e:
+                errors.append(f"Row {idx + 2}: {str(e)}")
+
+        return Response({"created": created_count, "errors": errors}, status=201)
+    
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def request_password_reset(request):

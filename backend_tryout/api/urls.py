@@ -31,6 +31,7 @@ urlpatterns = [
     path("tryouts/<int:tryout_id>/result/", TryoutResultView.as_view(), name="tryout-result"),
 
     path('latihan-soal/bulk-upload/', LatihanSoalBulkUploadView.as_view(), name='latihan-soal-bulk-upload'),
+    path('tryout/bulk-upload/', TryoutQuestionBulkUploadView.as_view(), name='tryout-bulk-upload'),
 
 
 
