@@ -155,7 +155,6 @@ class TryoutQuestionBulkUploadView(APIView):
                 question = Question(
                     tryout=tryout,
                     text=clean_val(row.get("text")),
-                    image=clean_val(row.get("image"), is_image=True),
                     option_a=clean_val(row.get("option_a")),
                     option_a_image=clean_val(row.get("option_a_image"), is_image=True),
                     option_b=clean_val(row.get("option_b")),
@@ -165,6 +164,12 @@ class TryoutQuestionBulkUploadView(APIView):
                     option_d=clean_val(row.get("option_d")),
                     option_d_image=clean_val(row.get("option_d_image"), is_image=True),
                     answer=clean_val(row.get("answer")) or "A",
+                    option_e=clean_val(row.get("option_e")),
+                    option_e_image=clean_val(row.get("option_e_image"), is_image=True),
+                    answer=clean_val(row.get("answer")) or "A",
+                    explanation=clean_val(row.get("explanation")),
+                    explanation_image=clean_val(row.get("explanation_image"), is_image=True),
+                    image=clean_val(row.get("image"), is_image=True),
                 )
                 question.save()
                 created_count += 1
