@@ -31,9 +31,22 @@ import pandas as pd
 
 
 User = get_user_model()
+import pandas as pd
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import permissions, status
+from rest_framework.parsers import MultiPartParser, FormParser, FileUploadParser
+from .models import Latihan, LatihanSoal
+
 class LatihanSoalBulkUploadView(APIView):
     parser_classes = [MultiPartParser, FormParser, FileUploadParser]
     permission_classes = [permissions.IsAuthenticated]
+
+    def clean_val(self, val):
+        """Convert NaN/float to None for Django fields."""
+        if pd.isna(val):
+            return None
+        return val
 
     def post(self, request, format=None):
         latihan_id = request.data.get("latihan_id")
@@ -51,7 +64,7 @@ class LatihanSoalBulkUploadView(APIView):
         if file.name.endswith(".xlsx"):
             df = pd.read_excel(file)
         else:
-            df = pd.read_csv(file)
+            df = pd.read_csv(file)  # jika tab-delimited: pd.read_csv(file, sep="\t")
 
         created_count = 0
         errors = []
@@ -60,21 +73,21 @@ class LatihanSoalBulkUploadView(APIView):
             try:
                 soal = LatihanSoal(
                     latsol=latihan,
-                    text_latihan=row.get("text_latihan",""),
-                    option_a_latihan=row.get("option_a_latihan",""),
-                    option_a_image_latihan=row.get("option_a_image_latihan", None),
-                    option_b_latihan=row.get("option_b_latihan",""),
-                    option_b_image_latihan=row.get("option_b_image_latihan", None),
-                    option_c_latihan=row.get("option_c_latihan",""),
-                    option_c_image_latihan=row.get("option_c_image_latihan", None),
-                    option_d_latihan=row.get("option_d_latihan",""),
-                    option_d_image_latihan=row.get("option_d_image_latihan", None),
-                    option_e_latihan=row.get("option_e_latihan",""),
-                    option_e_image_latihan=row.get("option_e_image_latihan", None),
-                    answer_latihan=row.get("answer_latihan","A"),
-                    explanation_latihan=row.get("explanation_latihan",""),
-                    explanation_image_latihan=row.get("explanation_image_latihan", None),
-                    image_latihan=row.get("image_latihan", None)
+                    text_latihan=self.clean_val(row.get("text_latihan")),
+                    option_a_latihan=self.clean_val(row.get("option_a_latihan")),
+                    option_a_image_latihan=self.clean_val(row.get("option_a_image_latihan")),
+                    option_b_latihan=self.clean_val(row.get("option_b_latihan")),
+                    option_b_image_latihan=self.clean_val(row.get("option_b_image_latihan")),
+                    option_c_latihan=self.clean_val(row.get("option_c_latihan")),
+                    option_c_image_latihan=self.clean_val(row.get("option_c_image_latihan")),
+                    option_d_latihan=self.clean_val(row.get("option_d_latihan")),
+                    option_d_image_latihan=self.clean_val(row.get("option_d_image_latihan")),
+                    option_e_latihan=self.clean_val(row.get("option_e_latihan")),
+                    option_e_image_latihan=self.clean_val(row.get("option_e_image_latihan")),
+                    answer_latihan=self.clean_val(row.get("answer_latihan")) or "A",
+                    explanation_latihan=self.clean_val(row.get("explanation_latihan")),
+                    explanation_image_latihan=self.clean_val(row.get("explanation_image_latihan")),
+                    image_latihan=self.clean_val(row.get("image_latihan"))
                 )
                 soal.save()
                 created_count += 1
@@ -85,6 +98,7 @@ class LatihanSoalBulkUploadView(APIView):
             "created": created_count,
             "errors": errors
         }, status=201)
+
 
 @api_view(["POST"])
 @permission_classes([AllowAny])
