@@ -7,7 +7,7 @@ from rest_framework.response import Response
 from rest_framework import generics, permissions, status, viewsets
 from django.core.cache import cache
 from rest_framework.views import APIView 
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, FileUploadParser
 from rest_framework.permissions import AllowAny
 from datetime import datetime, timedelta
 import pytz
@@ -31,18 +31,11 @@ import pandas as pd
 
 
 User = get_user_model()
-
 class LatihanSoalBulkUploadView(APIView):
-    """
-    Endpoint batch upload LatihanSoal dari CSV/Excel.
-    Admin pilih latihan (latihan_id dari frontend) dan upload file.
-    Gambar semua kolom pakai URL (tidak upload file).
-    CSV/Excel tidak disimpan di server.
-    """
-    parser_classes = [MultiPartParser, FormParser]  # CSV/Excel langsung dibaca
+    parser_classes = [MultiPartParser, FormParser, FileUploadParser]
     permission_classes = [permissions.IsAuthenticated]
 
-    def post(self, request):
+    def post(self, request, format=None):
         latihan_id = request.data.get("latihan_id")
         file = request.FILES.get("file")
 
