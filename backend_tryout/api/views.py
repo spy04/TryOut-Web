@@ -28,7 +28,9 @@ from datetime import timedelta
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.tokens import default_token_generator
 import pandas as pd
-
+import requests
+import os
+from urllib.parse import urlparse
 
 User = get_user_model()
 class LatihanSoalBulkUploadView(APIView):
